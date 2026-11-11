@@ -53,7 +53,13 @@ a.adm{display:block;text-align:center;color:var(--muted);font-size:.8rem;margin:
 
 .modal{position:fixed;inset:0;background:#0007;display:none;align-items:flex-end;justify-content:center;z-index:20}
 .modal.open{display:flex}
-.sheet{background:#fff;width:100%;max-width:640px;max-height:94vh;max-height:94dvh;display:flex;flex-direction:column;border-radius:20px 20px 0 0}
+.sheet{background:#fff;width:100%;max-width:640px;max-height:94vh;max-height:calc(var(--vh,100vh)*.94);display:flex;flex-direction:column;border-radius:20px 20px 0 0}
+.modal.kb{align-items:flex-start}
+.modal.kb .sheet{height:var(--kbh,42vh);max-height:var(--kbh,42vh);border-radius:0 0 16px 16px}
+.modal.kb .sh-body{min-height:0}
+.modal.kb .sh-foot{display:none}
+.modal.kb .sh-head{padding-top:6px;padding-bottom:6px}
+.modal.kb .sh-body::after{content:"";display:block;height:50vh}
 .sh-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 8px 10px 18px;border-bottom:1px solid var(--line)}
 .sh-head h3{margin:0;font-size:1.15rem;color:var(--marrom)}
 .x{flex:none;width:44px;height:44px;border-radius:50%;border:0;background:var(--rosa2);color:var(--rosa-d);font-size:1.5rem;line-height:1}
@@ -299,13 +305,29 @@ function aviso(t){const e=$("#toast");e.textContent=t;e.classList.add("on");clea
 function abrir(titulo,corpo,rodape){
   $("#shTitle").textContent=titulo;$("#shBody").innerHTML=corpo;$("#shFoot").innerHTML=rodape||"";
   const s=$("#sheet");s.onclick=s.onchange=s.oninput=null;$("#shBody").scrollTop=0;
-  $("#modal").classList.add("open");document.body.style.overflow="hidden";
+  $("#modal").classList.add("open");document.body.style.overflow="hidden";ajustaTeclado();
 }
 function fechar(){$("#modal").classList.remove("open");document.body.style.overflow=""}
+/* Teclado no celular: ao tocar num campo de texto a janela encolhe e sobe para o topo (acima do teclado).
+   Funciona mesmo quando o navegador não avisa a página que o teclado abriu. */
+const vv=window.visualViewport;let foco=false;
+const campoTexto=t=>!!t&&/^(INPUT|TEXTAREA)$/.test(t.tagName)&&!/^(checkbox|radio)$/.test(t.type)&&$("#modal").contains(t);
+function ajustaTeclado(h,top){
+  if(h===undefined){h=vv?vv.height:innerHeight;top=vv?vv.offsetTop:0}
+  const m=$("#modal"),enc=innerHeight-h>140,r=document.documentElement.style;
+  m.style.top=top+"px";m.style.height=h+"px";m.style.bottom="auto";
+  r.setProperty("--vh",h+"px");r.setProperty("--kbh",(enc?h:Math.round(h*.42))+"px");
+  m.classList.toggle("kb",enc||foco);
+}
+if(vv){vv.addEventListener("resize",()=>ajustaTeclado());vv.addEventListener("scroll",()=>ajustaTeclado())}
+addEventListener("resize",()=>ajustaTeclado());
+addEventListener("focusin",e=>{if(campoTexto(e.target)){foco=true;ajustaTeclado()}});
+addEventListener("focusout",()=>setTimeout(()=>{foco=campoTexto(document.activeElement);ajustaTeclado()},150));
 $("#shX").onclick=fechar;
 $("#modal").onclick=e=>{if(e.target.id==="modal")fechar()};
 addEventListener("keydown",e=>{if(e.key==="Escape")fechar()});
-$("#sheet").addEventListener("focusin",e=>{if(e.target.classList&&e.target.classList.contains("qn"))e.target.select()});
+$("#sheet").addEventListener("focusin",e=>{const t=e.target;if(t.classList&&t.classList.contains("qn"))t.select();
+  if(campoTexto(t)){t.style.scrollMarginTop="64px";const sobe=()=>{try{t.scrollIntoView({block:"start",behavior:"smooth"})}catch{}};setTimeout(sobe,200);setTimeout(sobe,650)}});
 const marca=()=>document.querySelectorAll("#sheet .opt").forEach(o=>{const i=o.querySelector("input");o.classList.toggle("sel",!!i&&i.checked)});
 
 /* ---------- menu ---------- */
@@ -494,7 +516,7 @@ const waUrl=p=>"https://wa.me/"+CONFIG.whatsapp+"?text="+encodeURIComponent(msg(
 function checkout(){
   const d=load("cliente",{}),minStr=dataMinima();
   abrir("Finalizar encomenda",`
-    <label class="l" for="f_nome">Seu nome</label><input id="f_nome" autocomplete="name" value="${esc(d.nome||"")}">
+    <label class="l" for="f_nome">Seu nome</label><input id="f_nome" autocomplete="name" autocapitalize="words" enterkeyhint="next" value="${esc(d.nome||"")}">
     <label class="l" for="f_tel">WhatsApp / telefone com DDD</label><input id="f_tel" type="tel" inputmode="tel" autocomplete="tel" value="${esc(d.tel||"")}">
     <label class="l" for="f_data">Data do evento ou retirada (mínimo ${CONFIG.antecedenciaDias} dias de antecedência)</label><input id="f_data" type="date" min="${minStr}">
     <label class="l" for="f_hora">Horário desejado</label><input id="f_hora" type="time">
@@ -503,9 +525,9 @@ function checkout(){
     <div id="endBox" class="hide"><label class="l" for="f_end">Endereço para entrega</label><input id="f_end" autocomplete="street-address" value="${esc(d.end||"")}"></div>
     <label class="l" for="f_pag">Forma de pagamento</label><select id="f_pag"><option>Pix</option><option>Cartão de crédito</option><option>Dinheiro</option><option>Transferência bancária</option></select>
     <label class="l" for="f_obs">Observações gerais</label><textarea id="f_obs"></textarea>
-    <p class="desc" style="margin-top:10px">Taxa de entrega, se houver, é combinada com a Faby.</p>`,
-    `<div class="sum"><span>Total${CONFIG.sinalPercentual?` · sinal de ${CONFIG.sinalPercentual}%: ${R(total()*CONFIG.sinalPercentual/100)}`:""}</span><b>${R(total())}</b></div>
-    <p class="erro" id="erro" role="alert"></p><button type="button" class="primary" id="enviar">Enviar encomenda pelo WhatsApp</button><button type="button" class="ghost" id="volta">Voltar</button>`);
+    <p class="desc" style="margin-top:10px">Taxa de entrega, se houver, é combinada com a Faby.</p>
+    <div class="sum" style="margin-top:20px"><span>Total${CONFIG.sinalPercentual?` · sinal de ${CONFIG.sinalPercentual}%: ${R(total()*CONFIG.sinalPercentual/100)}`:""}</span><b>${R(total())}</b></div>
+    <p class="erro" id="erro" role="alert"></p><button type="button" class="primary" id="enviar">Enviar encomenda pelo WhatsApp</button><button type="button" class="ghost" id="volta">Voltar</button>`,"");
   $("#sheet").onchange=e=>{if(e.target.id==="f_tipo")$("#endBox").classList.toggle("hide",e.target.value!=="entrega")};
   $("#volta").onclick=verCarrinho;
   $("#enviar").onclick=()=>{
